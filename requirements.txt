@@ -1,0 +1,5 @@
+imgui[glfw]
+plyer
+numpy
+opencv-python
+ultralytics
