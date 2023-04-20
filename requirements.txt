@@ -3,3 +3,8 @@ plyer
 numpy
 opencv-python
 ultralytics
+torch
+toml
+easydict
+timm
+pywin32
