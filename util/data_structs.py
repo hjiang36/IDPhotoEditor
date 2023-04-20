@@ -6,6 +6,8 @@ from .segmentation.grabcut_segmentation import run_grabcut_segmentation
 from .segmentation.mask_rcnn_segmentation import run_mask_rcnn_segmentation
 from .segmentation.yolo_segmentation import run_yolo_segmentation
 
+from .matting import matte_former
+
 """
 Image data structure class to hold image / mask etc. info.
 """
@@ -21,6 +23,8 @@ class ImageDataStructs:
         self.segmentation_options = ["GrabCut", "Mask-RCNN", "YOLO"]
         self.segmentation_index = 0
 
+        self.image_matter = None
+
     """
     Open an image file.
 
@@ -31,6 +35,8 @@ class ImageDataStructs:
         if not os.path.exists(file_path):
             return False
         self.img = cv2.cvtColor(cv2.imread(filename=file_path), cv2.COLOR_BGR2RGB)
+        if self.img.shape[0] * self.img.shape[1] > 2000000:
+            self.img = cv2.resize(self.img, (0, 0), fx=0.5, fy=0.5)
         self.img = (self.img / 255.0).astype(np.float32)
         self.mask = np.ones_like(self.img)
         self.img_path = file_path
@@ -91,3 +97,18 @@ class ImageDataStructs:
         self.mask[
             max(y - radius, 0):min(y + radius, self.height()),
             max(x - radius, 0):min(x + radius, self.width())] = 0.5
+
+    """
+    Image matting to precisely determine foreground and background.
+    This function will classify each unknown pixel (0.5) into foreground or background.
+
+    @return: the matted mask (0 means background, 1 means foreground).
+    """
+    def run_image_matting(self) -> np.ndarray:
+        if self.img is None or self.mask is None:
+            return None
+        if self.image_matter is None:
+            self.image_matter = matte_former.MatteFormerMatting(
+                "C:\\Users\\haomiao\\Downloads\\matteformer-master\\matte_former.pth")
+        self.mask = self.image_matter.run_matte_former_matting(self.img, self.mask)
+        return self.mask

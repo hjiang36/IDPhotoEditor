@@ -1,3 +1,6 @@
 [submodule "third-party/matteformer"]
 	path = third-party/matteformer
 	url = https://github.com/webtoon/matteformer.git
+[submodule "util/matting/matteformer"]
+	path = util/matting/matteformer
+	url = https://github.com/webtoon/matteformer.git

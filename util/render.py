@@ -427,6 +427,10 @@ class GUIRenderer:
                     self.image_renderer.update_mask_sub_image(
                         0.5 * np.ones((int(self.brush_radius), int(self.brush_radius)), dtype=np.float32),
                         pos_x, pos_y)
+            
+            # Run matte inference button.
+            if imgui.button("Run Matte Inference"):
+                self.image_renderer.update_mask(data.run_image_matting())
             imgui.end()
 
         gl.glViewport(0, 0, self.window_width, self.window_height)
