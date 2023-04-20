@@ -427,6 +427,12 @@ class GUIRenderer:
                     self.image_renderer.update_mask_sub_image(
                         0.5 * np.ones((int(self.brush_radius), int(self.brush_radius)), dtype=np.float32),
                         pos_x, pos_y)
+                
+                # Hide mouse if it's on canvas
+                if not io.want_capture_mouse:
+                    glfw.set_input_mode(self.window, glfw.CURSOR, glfw.CURSOR_HIDDEN)
+                else:
+                    glfw.set_input_mode(self.window, glfw.CURSOR, glfw.CURSOR_NORMAL)
             
             # Run matte inference button.
             if imgui.button("Run Matte Inference"):
