@@ -53,9 +53,9 @@ def generator_tensor_dict(image: np.ndarray, trimap: np.ndarray) -> dict:
     image = image.transpose((2, 0, 1))
 
     # trimap configuration
-    padded_trimap[padded_trimap < 85] = 0
-    padded_trimap[padded_trimap >= 170] = 2
-    padded_trimap[padded_trimap >= 85] = 1
+    padded_trimap[padded_trimap < 100] = 0
+    padded_trimap[padded_trimap >= 150] = 2
+    padded_trimap[padded_trimap >= 100] = 1
 
     # to tensor
     sample['image'], sample['trimap'] = torch.from_numpy(image), torch.from_numpy(trimap).to(torch.long)
@@ -97,6 +97,7 @@ class MatteFormerMatting:
     @return: the matted alpha mask.
     """
     def run_matte_former_matting(self, img, trimap) -> np.ndarray:
+        alpha = trimap
         image_dict = generator_tensor_dict(img, trimap)
         with torch.no_grad(): 
             image, trimap = image_dict['image'], image_dict['trimap']
@@ -126,4 +127,7 @@ class MatteFormerMatting:
             alpha_pred[np.argmax(trimap.cpu().numpy()[0], axis=0) == 2] = 255
 
             alpha_pred = alpha_pred[32:h+32, 32:w+32]
-        return alpha_pred.astype(np.float32) / 255.0
+        
+        # We only update trimap for unknown pixels
+        alpha[alpha == 0.5] = alpha_pred[alpha == 0.5] / 255.0
+        return alpha

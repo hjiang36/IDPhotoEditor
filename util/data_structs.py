@@ -24,6 +24,7 @@ class ImageDataStructs:
         self.segmentation_index = 0
 
         self.image_matter = None
+        self.mask_color = (0.0, 0.0, 0.0, 0.5)
 
     """
     Open an image file.
@@ -41,6 +42,32 @@ class ImageDataStructs:
         self.mask = np.ones_like(self.img)
         self.img_path = file_path
         return True
+
+    """
+    Save the data to numpy binary file.
+
+    @param file_path: full path to save the file.
+    """
+    def dump_to_file(self, file_path: str) -> None:
+        np.savez_compressed(
+            file_path,
+            img=self.img,
+            mask=self.mask,
+            img_path=self.img_path,
+            mask_color=self.mask_color)
+
+    """
+    Load the data from numpy binary file.
+    """
+    @staticmethod
+    def load_from_file(file_path: str) -> "ImageDataStructs":
+        data = ImageDataStructs()
+        parameters = np.load(file_path)
+        data.img = parameters["img"]
+        data.mask = parameters["mask"]
+        data.img_path = parameters["img_path"]
+        data.mask_color = parameters["mask_color"]
+        return data
 
     """
     Get width of image.

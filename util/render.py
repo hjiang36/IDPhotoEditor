@@ -345,7 +345,6 @@ class GUIRenderer:
         self.image_renderer: Optional[_ImageRenderer] = None
         self.window_width = width
         self.window_height = height
-        self.mask_color = (0.0, 0.0, 0.0, 0.5)
 
         self.edit_mode_index = 0
         self.edit_mode_options = ["Move", "Brush"]
@@ -360,11 +359,28 @@ class GUIRenderer:
     def should_close(self) -> bool:
         return glfw.window_should_close(self.window)
 
+
+    """
+    Reload the window size and renderer to fit latest data.
+
+    @param data: image data to be rendered.
+    """
+    def reload_window(self, data: ImageDataStructs) -> None:
+        glfw.set_window_attrib(self.window, glfw.RESIZABLE, True)
+        glfw.set_window_aspect_ratio(self.window, data.width(), data.height())
+        glfw.set_window_attrib(self.window, glfw.RESIZABLE, False)
+        self.window_width, self.window_height = glfw.get_window_size(self.window)
+        self.image_renderer = _ImageRenderer(data.img)
+        self.image_renderer.update_mask(data.mask)
+        self.image_renderer.set_mask_color(data.mask_color)
+
     """
     Render one frame.
-    TODO: we might want to register a controller here.
+    We use simple view model separation between renderer and data.
+    As there is single GUI and single data class, we don't introduce
+    the controller as middle layer.
 
-    @param 
+    @param data: image data to be rendered.
     """
     def render(self, data: ImageDataStructs) -> None:
         glfw.poll_events()
@@ -374,21 +390,26 @@ class GUIRenderer:
 
         if imgui.begin_main_menu_bar():
             if imgui.begin_menu("File", True):
-                clicked_open, selected_open = imgui.menu_item("Open", "", False, True)
+                clicked_open, _ = imgui.menu_item("Open", "", False, True)
                 if clicked_open:
                     file_names = plyer.filechooser.open_file()
                     if len(file_names) > 0:
                         data.open_image(file_names[0])
-                        glfw.set_window_attrib(self.window, glfw.RESIZABLE, True)
-                        glfw.set_window_aspect_ratio(self.window, data.width(), data.height())
-                        glfw.set_window_attrib(self.window, glfw.RESIZABLE, False)
-                        self.window_width, self.window_height = glfw.get_window_size(self.window)
-                        self.image_renderer = _ImageRenderer(data.img)
-                        self.image_renderer.set_mask_color(self.mask_color)
+                        self.reload_window(data)
 
-                clicked_quit, selected_quit = imgui.menu_item(
-                    "Quit", 'Cmd+Q', False, True
-                )
+                clicked_save, _ = imgui.menu_item("Save", "", False, True)
+                if clicked_save:
+                    file_names = plyer.filechooser.save_file()
+                    if file_names:
+                        data.dump_to_file(file_names[0])
+                clicked_load, _ = imgui.menu_item("Load", "", False, True)
+                if clicked_load:
+                    file_names = plyer.filechooser.open_file()
+                    if file_names is not None:
+                        data = ImageDataStructs.load_from_file(file_names[0])
+                        self.reload_window(data)
+                
+                clicked_quit, _ = imgui.menu_item("Quit", 'Cmd+Q', False, True)
 
                 if clicked_quit:
                     exit(1)
@@ -405,9 +426,9 @@ class GUIRenderer:
                 data.segmentation_index = current
                 self.image_renderer.update_mask(data.run_segmentation(erode_dilate_size=50))
             
-            changed, self.mask_color = imgui.color_edit4("Background Color", *self.mask_color)
+            changed, data.mask_color = imgui.color_edit4("Background Color", *data.mask_color)
             if changed:
-                self.image_renderer.set_mask_color(self.mask_color)
+                self.image_renderer.set_mask_color(data.mask_color)
 
             # Cursor edit mode
             _, self.edit_mode_index = imgui.combo("Edit Mode", self.edit_mode_index, self.edit_mode_options)
