@@ -8,6 +8,8 @@ from .segmentation.yolo_segmentation import run_yolo_segmentation
 
 from .matting import matte_former
 
+from .pose.yolo_pose import run_yolo_pose_estimation
+
 """
 Image data structure class to hold image / mask etc. info.
 """
