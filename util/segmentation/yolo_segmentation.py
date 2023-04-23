@@ -9,7 +9,7 @@ We only segment the person in the image.
 @return: segmentation mask.
 """
 def run_yolo_segmentation(img: np.ndarray) -> np.ndarray:
-    model = YOLO("yolov8n-seg.pt")
+    model = YOLO("yolov8m-seg.pt")
 
     # Find person only.
     results = model.predict(img * 255.0, classes=[0], retina_masks=True)

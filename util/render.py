@@ -6,6 +6,7 @@ import OpenGL.GL as gl
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
 import plyer
+import cv2
 import numpy as np
 from importlib import resources
 
@@ -261,6 +262,7 @@ class _ImageRenderer:
         self.texture = _Texture(image)
         self.mask_texture = _Texture(np.ones_like(image))
         self.mask_color = (0.0, 0.0, 0.0, 0.5)
+        self.bounding_box = None
         vertex_shader_str = resources.files("util.shaders").joinpath(
             "full_screen.vs").open("r").read()
         fragment_shader_str = resources.files("util.shaders").joinpath(
@@ -289,6 +291,16 @@ class _ImageRenderer:
     """
     def update_mask_sub_image(self, new_data: np.ndarray, x: int, y: int) -> None:
         self.mask_texture.update_sub_image(new_data, x, y)
+
+    """
+    Update the proposed bounding box data.
+    """
+    def update_bounding_box(self, bounding_box: np.ndarray) -> None:
+        if bounding_box is None:
+            self.bounding_box = None
+            return
+        assert len(bounding_box) == 4, "Bounding box should be in (left, right, top, bottom) format."
+        self.bounding_box = (bounding_box[0], bounding_box[1], bounding_box[2], bounding_box[3])
 
     """
     Set the mask color.
@@ -321,6 +333,15 @@ class _ImageRenderer:
         # Brush information.
         gl.glUniform3f(gl.glGetUniformLocation(self.program.id(), "brushInfo"), *brush_info)
 
+        # Bounding box information.
+        # TODO: we should make the box drawing a separate draw call. For now it's just a hack.
+        if self.bounding_box is not None:
+            gl.glUniform4f(gl.glGetUniformLocation(
+                self.program.id(), "boundingBox"), *self.bounding_box)
+        else:
+            gl.glUniform4f(gl.glGetUniformLocation(
+                self.program.id(), "boundingBox"), -1.0, -1.0, -1.0, -1.0)
+
         gl.glBindVertexArray(self.vao.id())
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         gl.glDrawArrays(gl.GL_TRIANGLES, 0, 3)
@@ -349,6 +370,8 @@ class GUIRenderer:
         self.edit_mode_index = 0
         self.edit_mode_options = ["Move", "Brush"]
         self.brush_radius = 20.0
+
+        self.crop_propose_bbx: Optional[np.ndarray] = None
 
     
     """
@@ -406,11 +429,22 @@ class GUIRenderer:
                 if clicked_load:
                     file_names = plyer.filechooser.open_file()
                     if file_names is not None:
-                        data = ImageDataStructs.load_from_file(file_names[0])
+                        data.load_from_file(file_names[0])
                         self.reload_window(data)
+
+                if self.image_renderer is not None:
+                    clicked_export, _ = imgui.menu_item("Export", "", False, True)
+                    if clicked_export:
+                        file_names = plyer.filechooser.save_file()
+                        if file_names:
+                            alpha = 1.0 - (1.0 - data.mask[..., np.newaxis]) * self.image_renderer.mask_color[3]
+                            composed_data = data.img * alpha
+                            for c in range(3):
+                                composed_data[:, :, c] += self.image_renderer.mask_color[c] * (1.0 - alpha[:, :, 0])
+                            composed_data = cv2.cvtColor(composed_data, cv2.COLOR_RGB2BGR)
+                            cv2.imwrite(file_names[0], (composed_data * 255.0).astype(np.uint8))
                 
                 clicked_quit, _ = imgui.menu_item("Quit", 'Cmd+Q', False, True)
-
                 if clicked_quit:
                     exit(1)
 
@@ -421,6 +455,23 @@ class GUIRenderer:
         cursor_pos = glfw.get_cursor_pos(self.window)
         if self.image_renderer is not None:
             imgui.begin("Controls", flags=imgui.WINDOW_ALWAYS_AUTO_RESIZE)
+            # Crop controls
+            if self.crop_propose_bbx is None:
+                if imgui.button("Propose Crop"):
+                    self.crop_propose_bbx = data.propose_crop_region()
+            else:
+                _, self.crop_propose_bbx = imgui.drag_float4("Crop", *self.crop_propose_bbx)
+                if imgui.button("Confirm Crop"):
+                    cropped_img = data.img[
+                        int(self.crop_propose_bbx[2]):int(self.crop_propose_bbx[3]),
+                        int(self.crop_propose_bbx[0]):int(self.crop_propose_bbx[1]),
+                        :]
+                    data.open_image_with_array(cropped_img)
+                    self.crop_propose_bbx = None
+                    self.reload_window(data)
+            self.image_renderer.update_bounding_box(self.crop_propose_bbx)
+
+            # Segmentation controls
             clicked, current = imgui.combo("Seg Method", data.segmentation_index, data.segmentation_options)
             if clicked and current != data.segmentation_index:
                 data.segmentation_index = current
@@ -444,10 +495,11 @@ class GUIRenderer:
                 if not io.want_capture_mouse and glfw.get_mouse_button(self.window, glfw.MOUSE_BUTTON_LEFT) == glfw.PRESS:
                     pos_x = int(cursor_pos[0] / self.window_width * data.width())
                     pos_y = int(cursor_pos[1] / self.window_height * data.height())
-                    data.mark_unknown(pos_x, pos_y, int(self.brush_radius))
-                    self.image_renderer.update_mask_sub_image(
-                        0.5 * np.ones((int(self.brush_radius), int(self.brush_radius)), dtype=np.float32),
-                        pos_x, pos_y)
+                    if pos_x >= 0 and pos_y >= 0 and pos_x < data.width() - self.brush_radius and pos_y < data.height() - self.brush_radius:
+                        data.mark_unknown(pos_x, pos_y, int(self.brush_radius))
+                        self.image_renderer.update_mask_sub_image(
+                            0.5 * np.ones((int(self.brush_radius), int(self.brush_radius)), dtype=np.float32),
+                            pos_x, pos_y)
                 
                 # Hide mouse if it's on canvas
                 if not io.want_capture_mouse:

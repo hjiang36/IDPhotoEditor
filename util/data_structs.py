@@ -9,6 +9,7 @@ from .segmentation.yolo_segmentation import run_yolo_segmentation
 from .matting import matte_former
 
 from .pose.yolo_pose import run_yolo_pose_estimation
+from .pose.mediapipe_facial_landmark import get_face_bounding_box
 
 """
 Image data structure class to hold image / mask etc. info.
@@ -41,9 +42,21 @@ class ImageDataStructs:
         if self.img.shape[0] * self.img.shape[1] > 2000000:
             self.img = cv2.resize(self.img, (0, 0), fx=0.5, fy=0.5)
         self.img = (self.img / 255.0).astype(np.float32)
-        self.mask = np.ones_like(self.img)
-        self.img_path = file_path
+        self.open_image_with_array(self.img, file_path)
         return True
+
+    """
+    Open image with numpy array.
+
+    @param img: image data to open.
+    @param file_path: full path to image file.
+    """
+    def open_image_with_array(self, img: np.ndarray, file_path:str="") -> None:
+        self.img = img
+        self.mask = np.ones_like(self.img)
+        self.segmentation_index = 0
+        self.img_path = file_path
+
 
     """
     Save the data to numpy binary file.
@@ -61,15 +74,12 @@ class ImageDataStructs:
     """
     Load the data from numpy binary file.
     """
-    @staticmethod
-    def load_from_file(file_path: str) -> "ImageDataStructs":
-        data = ImageDataStructs()
+    def load_from_file(self, file_path: str) -> None:
         parameters = np.load(file_path)
-        data.img = parameters["img"]
-        data.mask = parameters["mask"]
-        data.img_path = parameters["img_path"]
-        data.mask_color = parameters["mask_color"]
-        return data
+        self.img = parameters["img"]
+        self.mask = parameters["mask"]
+        self.img_path = parameters["img_path"]
+        self.mask_color = parameters["mask_color"]
 
     """
     Get width of image.
@@ -141,3 +151,22 @@ class ImageDataStructs:
                 "C:\\Users\\haomiao\\Downloads\\matteformer-master\\matte_former.pth")
         self.mask = self.image_matter.run_matte_former_matting(self.img, self.mask)
         return self.mask
+    
+    """
+    Estimate the proper crop region for the image.
+    TODO: we should accept a config settings about target requirements.
+
+    """
+    def propose_crop_region(self) -> np.ndarray:
+        if self.img is None:
+            return None
+        face_bbx = get_face_bounding_box(self.img)
+        face_width = face_bbx[1] - face_bbx[0]
+
+        target_height = face_width * 2.0 / 33.0 * 48.0
+        center_height = face_bbx[2] + (face_bbx[3] - face_bbx[2]) * 0.33
+        return np.array(
+            [face_bbx[0] - face_width * 0.5,
+             face_bbx[1] + face_width * 0.5,
+             center_height - target_height * 0.5,
+             center_height + target_height * 0.5])
