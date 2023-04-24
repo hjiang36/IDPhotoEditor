@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.nn import functional as F
+import gdown
 
 import sys
 import os
@@ -80,6 +81,16 @@ class MatteFormerMatting:
         # build model
         self.model = matteformer_networks.get_generator(is_train=False)
         self.model.cuda()
+
+        # Check if model path exists
+        if not os.path.exists(model_path):
+            # Try again local folder path
+            model_path = os.path.join(Path(__file__).parent.absolute(), "matte_former.pth")
+            if not os.path.exists(model_path):
+                print("Model path does not exist. Downloading model...")
+                url = "https://drive.google.com/uc?id=1AU7uM1dtYjEhtOa_9OGfoQUE-tmW9mX5"
+                output = os.path.join(Path(__file__).parent.absolute(), "matte_former.pth")
+                gdown.download(url, output, quiet=False)
 
         # load checkpoint
         checkpoint = torch.load(model_path)

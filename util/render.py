@@ -419,6 +419,18 @@ class GUIRenderer:
                     if len(file_names) > 0:
                         data.open_image(file_names[0])
                         self.reload_window(data)
+                
+                clicked_open_camera, _ = imgui.menu_item("Open from camera", "", False, True)
+                if clicked_open_camera:
+                    camera = cv2.VideoCapture(0)
+                    ret, image = camera.read()
+                    camera.release()
+                    if ret:
+                        data.open_image_with_array(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+                    else:
+                        print("Open camera failed.")
+                        exit(-1)
+                    self.reload_window(data)
 
                 clicked_save, _ = imgui.menu_item("Save", "", False, True)
                 if clicked_save:
@@ -462,11 +474,7 @@ class GUIRenderer:
             else:
                 _, self.crop_propose_bbx = imgui.drag_float4("Crop", *self.crop_propose_bbx)
                 if imgui.button("Confirm Crop"):
-                    cropped_img = data.img[
-                        int(self.crop_propose_bbx[2]):int(self.crop_propose_bbx[3]),
-                        int(self.crop_propose_bbx[0]):int(self.crop_propose_bbx[1]),
-                        :]
-                    data.open_image_with_array(cropped_img)
+                    data.crop_image(self.crop_propose_bbx)
                     self.crop_propose_bbx = None
                     self.reload_window(data)
             self.image_renderer.update_bounding_box(self.crop_propose_bbx)

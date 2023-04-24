@@ -8,3 +8,4 @@ toml
 easydict
 timm
 pywin32
+gdown

@@ -23,7 +23,7 @@ class ImageDataStructs:
         self.mask: np.ndarray = None
 
         self.img_path = ""
-        self.segmentation_options = ["GrabCut", "Mask-RCNN", "YOLO"]
+        self.segmentation_options = ["None", "YOLO"]
         self.segmentation_index = 0
 
         self.image_matter = None
@@ -42,18 +42,24 @@ class ImageDataStructs:
         if self.img.shape[0] * self.img.shape[1] > 2000000:
             self.img = cv2.resize(self.img, (0, 0), fx=0.5, fy=0.5)
         self.img = (self.img / 255.0).astype(np.float32)
-        self.open_image_with_array(self.img, file_path)
+        self.open_image_with_array(self.img, file_path=file_path)
         return True
 
     """
     Open image with numpy array.
 
     @param img: image data to open.
+    @param mask: mask data to be used.
     @param file_path: full path to image file.
     """
-    def open_image_with_array(self, img: np.ndarray, file_path:str="") -> None:
+    def open_image_with_array(self, img: np.ndarray, mask: np.ndarray=None, file_path:str="") -> None:
+        if img.dtype == np.uint8:
+            img = img.astype(np.float32) / 255.0
         self.img = img
-        self.mask = np.ones_like(self.img)
+        if mask is None:
+            self.mask = np.ones_like(self.img)
+        else:
+            self.mask = mask
         self.segmentation_index = 0
         self.img_path = file_path
 
@@ -113,6 +119,8 @@ class ImageDataStructs:
             self.mask = run_yolo_segmentation(self.img)
         elif segmentation_method == "GrabCut":
             self.mask = run_grabcut_segmentation(self.img, self.mask, (0, 0, self.width(), self.height()))
+        elif segmentation_method == "None":
+            self.mask = np.ones_like(self.img)
         else:
             print("Unknown segmentation method: " + segmentation_method)
             return None
@@ -147,8 +155,7 @@ class ImageDataStructs:
         if self.img is None or self.mask is None:
             return None
         if self.image_matter is None:
-            self.image_matter = matte_former.MatteFormerMatting(
-                "C:\\Users\\haomiao\\Downloads\\matteformer-master\\matte_former.pth")
+            self.image_matter = matte_former.MatteFormerMatting("matte_former.pth")
         self.mask = self.image_matter.run_matte_former_matting(self.img, self.mask)
         return self.mask
     
@@ -170,3 +177,27 @@ class ImageDataStructs:
              face_bbx[1] + face_width * 0.5,
              center_height - target_height * 0.5,
              center_height + target_height * 0.5])
+
+    """
+    Crop the image according to the crop region.
+    This function would pad image with zeros if crop region is out of image boundary.
+
+    @param crop_region: the crop region (left, right, top, bottom).
+    """
+    def crop_image(self, crop_region: np.ndarray) -> None:
+        if self.img is None:
+            return
+        assert len(crop_region) == 4, "crop_region should be a 4-element array."
+        pad_size = np.array([
+            [max(0, -crop_region[2]), max(0, crop_region[3] - self.height())],
+            [max(0, -crop_region[0]), max(0, crop_region[1] - self.width())],
+            [0, 0]]).astype(np.int32)
+        padded_image = np.pad(self.img, pad_size, "constant", constant_values=0)
+        padded_mask = np.pad(self.mask, pad_size, "constant", constant_values=0)
+        cropped_image = padded_image[
+            int(pad_size[0][0] + crop_region[2]):int(pad_size[0][0] + crop_region[3]),
+            int(pad_size[1][0] + crop_region[0]):int(pad_size[1][0] + crop_region[1]), :]
+        cropped_mask = padded_mask[
+            int(pad_size[0][0] + crop_region[2]):int(pad_size[0][0] + crop_region[3]),
+            int(pad_size[1][0] + crop_region[0]):int(pad_size[1][0] + crop_region[1]), :]
+        self.open_image_with_array(cropped_image, mask=cropped_mask, file_path=self.img_path)
