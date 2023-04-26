@@ -9,3 +9,4 @@ easydict
 timm
 pywin32
 gdown
+mediapipe

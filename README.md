@@ -17,4 +17,6 @@ There is no new algorithm developed in this project.
 It's puting existing models / algorithms together to form a personal tool.
 
 ### Usage
-TO BE ADDED
+In the project folder, run `pip3 install -r requirements.txt` to install all the dependencies.
+Run `python main.py` to start the GUI.
+Fast walk-through about the functionalities is available [here](https://www.youtube.com/watch?v=SNrpKWFR_1I)
